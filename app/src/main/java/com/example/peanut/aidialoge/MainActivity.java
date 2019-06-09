@@ -6,6 +6,8 @@ import android.annotation.SuppressLint;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Message;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -24,6 +26,11 @@ import com.iflytek.aiui.AIUIMessage;
 import org.json.JSONObject;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.util.Random;
+import java.util.Timer;
+import java.util.TimerTask;
+
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
@@ -38,6 +45,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private AIUIAgent mAIUIAgent = null;
 
+    private Timer timer;
+
+    private Handler mHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            if (msg.what == 0) {
+                sayHi();
+            }
+        }
+    };
+
     //交互状态
     private int mAIUIState = AIUIConstant.STATE_IDLE;
 
@@ -47,9 +65,105 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         this.requestWindowFeature(Window.FEATURE_NO_TITLE);
         setContentView(R.layout.activity_main);
         initLayout();
+        initTimer();
 
         mToast = Toast.makeText(this, "", Toast.LENGTH_SHORT);
         requestPermission();
+        if( checkAIUIAgent() ){
+            String ttsStr = "Hi,跟我说话吧";
+            byte[] ttsData = new byte[0];  //转为二进制数据
+            try {
+                ttsData = ttsStr.getBytes("utf-8");
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
+
+            StringBuffer params = new StringBuffer();  //构建合成参数
+            params.append("vcn=xiaoyan");  //合成发音人
+            params.append(",speed=50");  //合成速度
+            params.append(",pitch=50");  //合成音调
+            params.append(",volume=50");  //合成音量
+
+            AIUIMessage startTts = new AIUIMessage(AIUIConstant.CMD_TTS,AIUIConstant.START, 0, params.toString(), ttsData);
+            mAIUIAgent.sendMessage(startTts);
+        }
+
+    }
+
+    private void sayHi(){
+        if( checkAIUIAgent() ){
+
+            Random random = new Random();
+
+            int i = random.nextInt(10);
+            String ttsStr = "你好呀";
+            switch (i){
+                case 0:
+                    ttsStr="来和我说话吧";
+                    break;
+
+                case 1:
+                    ttsStr="要不要听我讲个故事";
+                    break;
+
+                case 2:
+                    ttsStr="今天天气真好，我们一起吹泡泡，好吗？";
+                    break;
+
+                case 3:
+                    ttsStr="我们一起吹个气球吧，爸爸妈妈也来吗";
+                    break;
+
+                case 4:
+                    ttsStr="我喜欢你经常玩的那个玩具";
+                    break;
+
+                case 5:
+                    ttsStr="我想去卫生间";
+                    break;
+
+                default:
+                    ttsStr="你好,在干什么呢";
+                    break;
+            }
+            byte[] ttsData = new byte[0];  //转为二进制数据
+            try {
+                ttsData = ttsStr.getBytes("utf-8");
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
+
+            StringBuffer params = new StringBuffer();  //构建合成参数
+            params.append("vcn=xiaoyan");  //合成发音人
+            params.append(",speed=50");  //合成速度
+            params.append(",pitch=50");  //合成音调
+            params.append(",volume=50");  //合成音量
+
+            AIUIMessage startTts = new AIUIMessage(AIUIConstant.CMD_TTS,AIUIConstant.START, 0, params.toString(), ttsData);
+            mAIUIAgent.sendMessage(startTts);
+
+            showTip(ttsStr);
+        }
+    }
+
+    private void initTimer(){
+
+        timer=new Timer();
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                // (1) 使用handler发送消息
+                Message message=new Message();
+                message.what=0;
+                mHandler.sendMessage(message);
+            }
+        },10000,10000);
+    }
+
+    private void destroyTimer(){
+        if(timer!=null){
+            timer.cancel();
+        }
     }
 
     /**
@@ -67,6 +181,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             return;
         }
 
+        destroyTimer();
+        initTimer();
+
         switch (view.getId()) {
             // 开始语音理解
             case R.id.nlp_start:
@@ -74,6 +191,25 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
             default:
                 break;
+        }
+        String ttsStr = mNlpText.getText().toString();
+        ttsStr.replaceAll("\\s*", "");
+        if(!ttsStr.equals("")){
+            byte[] ttsData = new byte[0];  //转为二进制数据
+            try {
+                ttsData = ttsStr.getBytes("utf-8");
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
+
+            StringBuffer params = new StringBuffer();  //构建合成参数
+            params.append("vcn=xiaoyan");  //合成发音人
+            params.append(",speed=50");  //合成速度
+            params.append(",pitch=50");  //合成音调
+            params.append(",volume=50");  //合成音量
+
+            AIUIMessage startTts = new AIUIMessage(AIUIConstant.CMD_TTS,AIUIConstant.START, 0, params.toString(), ttsData);
+            mAIUIAgent.sendMessage(startTts);
         }
     }
 
@@ -177,6 +313,21 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                                     mNlpText.append(str);
                                 }
                             }
+
+                            else if ("tts".equals(sub)) {
+                                if (content.has("cnt_id")) {
+                                    String sid = event.data.getString("sid");
+                                    String cnt_id2 = content.getString("cnt_id");
+                                    byte[] audio = event.data.getByteArray(cnt_id2); //合成音频数据
+
+                                    int dts = content.getInt("dts");
+                                    int frameId = content.getInt("frame_id");// 音频段id，取值：1,2,3,...
+
+                                    int percent = event.data.getInt("percent"); //合成进度
+
+                                    boolean isCancel = "1".equals(content.getString("cancel"));  //合成过程中是否被取消
+                                }
+                            }
                         }
                     } catch (Throwable e) {
                         e.printStackTrace();
@@ -232,6 +383,32 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     }
                 } break;
 
+                case AIUIConstant.EVENT_TTS: {
+                    switch (event.arg1) {
+                        case AIUIConstant.TTS_SPEAK_BEGIN:
+                            //showTip("开始播放");
+                            break;
+
+                        case AIUIConstant.TTS_SPEAK_PROGRESS:
+                            //showTip("播放进度为" + event.data.getInt("percent"));     // 播放进度
+                            break;
+
+                        case AIUIConstant.TTS_SPEAK_PAUSED:
+                            //showTip("暂停播放");
+                            break;
+
+                        case AIUIConstant.TTS_SPEAK_RESUMED:
+                            //showTip("恢复播放");
+                            break;
+
+                        case AIUIConstant.TTS_SPEAK_COMPLETED:
+                            //showTip("播放完成");
+                            break;
+
+                        default:
+                            break;
+                    }
+                } break;
 
                 default:
                     break;
@@ -251,6 +428,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             this.mAIUIAgent.destroy();
             this.mAIUIAgent = null;
         }
+
+        timer.cancel();
     }
 
     private void showTip(final String str)
